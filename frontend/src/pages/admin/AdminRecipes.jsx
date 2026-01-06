@@ -9,6 +9,7 @@ import { showToast } from "@/components/ui/Toast"
 import {
   getPendingRecipes,
   approveRecipe,
+  rejectRecipe,
   getAdminRecipes,
   createAdminRecipe,
   updateAdminRecipe,
@@ -16,7 +17,7 @@ import {
   getFoodItems,
   getUnits
 } from "@/utils/api"
-import { Plus, Pencil, Trash2, CheckCircle2, Loader2 } from "lucide-react"
+import { Plus, Pencil, Trash2, CheckCircle2, Loader2, Eye, XCircle } from "lucide-react"
 
 const createEmptyRecipeForm = () => ({
   name: "",
@@ -46,6 +47,9 @@ export function AdminRecipes() {
   const [recipeForm, setRecipeForm] = useState(createEmptyRecipeForm())
   const [recipeSubmitting, setRecipeSubmitting] = useState(false)
   const [confirmRecipeDelete, setConfirmRecipeDelete] = useState(null)
+  const [pendingDetail, setPendingDetail] = useState(null)
+  const [confirmReject, setConfirmReject] = useState(null)
+  const [pendingActionId, setPendingActionId] = useState(null)
 
   const [foodItems, setFoodItems] = useState([])
   const [units, setUnits] = useState([])
@@ -265,6 +269,7 @@ export function AdminRecipes() {
 
   const handleApproveRecipe = async (recipeId) => {
     try {
+      setPendingActionId(recipeId)
       await approveRecipe(recipeId)
       showToast("Đã duyệt công thức", "success")
       await loadPendingRecipes()
@@ -272,7 +277,41 @@ export function AdminRecipes() {
     } catch (error) {
       console.error("Approve recipe error:", error)
       showToast(error.message || "Không thể duyệt công thức", "error")
+    } finally {
+      setPendingActionId(null)
     }
+  }
+
+  const handleRejectRecipe = async () => {
+    if (!confirmReject?._id) return
+    try {
+      setPendingActionId(confirmReject._id)
+      await rejectRecipe(confirmReject._id)
+      showToast("Đã hủy duyệt công thức", "success")
+      setConfirmReject(null)
+      await loadPendingRecipes()
+    } catch (error) {
+      console.error("Reject recipe error:", error)
+      showToast(error.message || "Không thể hủy duyệt công thức", "error")
+    } finally {
+      setPendingActionId(null)
+    }
+  }
+
+  const renderIngredient = (ingredient, index) => {
+    const name = ingredient.foodItemId?.name || ingredient.foodItemName || "Không rõ"
+    const unit = ingredient.unitId?.abbreviation || ingredient.unitId?.name || ingredient.unitName || ""
+    const quantity = ingredient.quantity ?? ""
+    const notes = ingredient.notes?.trim()
+    const quantityLabel = quantity !== "" ? `${quantity}${unit ? ` ${unit}` : ""}` : ""
+
+    return (
+      <div key={`pending-ingredient-${index}`} className="flex flex-wrap items-center gap-2 text-sm">
+        <span className="font-medium text-slate-900">{name}</span>
+        {quantityLabel && <span className="text-muted-foreground">({quantityLabel})</span>}
+        {notes && <span className="text-muted-foreground italic">- {notes}</span>}
+      </div>
+    )
   }
 
   return (
@@ -301,10 +340,29 @@ export function AdminRecipes() {
                       Tạo bởi: {recipe.createdBy?.fullName || "Ẩn danh"} ({recipe.createdBy?.email || "N/A"})
                     </div>
                   </div>
-                  <Button onClick={() => handleApproveRecipe(recipe._id)} className="gap-2">
-                    <CheckCircle2 className="h-4 w-4" />
-                    Duyệt
-                  </Button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button variant="outline" onClick={() => setPendingDetail(recipe)} className="gap-2">
+                      <Eye className="h-4 w-4" />
+                      Xem chi tiết
+                    </Button>
+                    <Button
+                      onClick={() => handleApproveRecipe(recipe._id)}
+                      className="gap-2"
+                      disabled={pendingActionId === recipe._id}
+                    >
+                      <CheckCircle2 className="h-4 w-4" />
+                      Duyệt
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      onClick={() => setConfirmReject(recipe)}
+                      className="gap-2"
+                      disabled={pendingActionId === recipe._id}
+                    >
+                      <XCircle className="h-4 w-4" />
+                      Hủy duyệt
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -578,6 +636,73 @@ export function AdminRecipes() {
         confirmText="Xóa"
         cancelText="Hủy"
         variant="destructive"
+      />
+
+      <Dialog
+        isOpen={Boolean(pendingDetail)}
+        onClose={() => setPendingDetail(null)}
+        title={pendingDetail?.name || "Chi tiết công thức"}
+        className="max-w-3xl"
+      >
+        {pendingDetail && (
+          <div className="space-y-6">
+            <div className="space-y-2">
+              <div className="text-sm text-muted-foreground">
+                Tạo bởi: {pendingDetail.createdBy?.fullName || "Ẩn danh"} ({pendingDetail.createdBy?.email || "N/A"})
+              </div>
+              {pendingDetail.description && (
+                <p className="text-sm text-muted-foreground">{pendingDetail.description}</p>
+              )}
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2 text-sm">
+              <div>Danh mục: <span className="text-slate-900">{pendingDetail.category || "Chưa phân loại"}</span></div>
+              <div>Độ khó: <span className="text-slate-900">{pendingDetail.difficulty || "medium"}</span></div>
+              <div>Khẩu phần: <span className="text-slate-900">{pendingDetail.servings || 0} người</span></div>
+              <div>Thời gian chuẩn bị: <span className="text-slate-900">{pendingDetail.prepTime || 0} phút</span></div>
+              <div>Thời gian nấu: <span className="text-slate-900">{pendingDetail.cookTime || 0} phút</span></div>
+            </div>
+
+            <div className="space-y-2">
+              <h4 className="text-sm font-semibold">Nguyên liệu</h4>
+              {(pendingDetail.ingredients || []).length === 0 ? (
+                <div className="text-sm text-muted-foreground">Chưa có nguyên liệu.</div>
+              ) : (
+                <div className="space-y-1">
+                  {(pendingDetail.ingredients || []).map((ingredient, index) => renderIngredient(ingredient, index))}
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <h4 className="text-sm font-semibold">Hướng dẫn</h4>
+              {(pendingDetail.instructions || []).length === 0 ? (
+                <div className="text-sm text-muted-foreground">Chưa có hướng dẫn.</div>
+              ) : (
+                <div className="space-y-2 text-sm">
+                  {(pendingDetail.instructions || []).map((step, index) => (
+                    <div key={`pending-step-${index}`}>
+                      <span className="font-medium">Bước {step.step || index + 1}:</span>{" "}
+                      <span className="text-muted-foreground">{step.description || ""}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </Dialog>
+
+      <ConfirmDialog
+        isOpen={Boolean(confirmReject)}
+        onClose={() => setConfirmReject(null)}
+        onConfirm={handleRejectRecipe}
+        title="Hủy duyệt công thức"
+        message={`Bạn có chắc muốn hủy duyệt công thức "${confirmReject?.name || ""}"?`}
+        confirmText="Hủy duyệt"
+        cancelText="Đóng"
+        variant="destructive"
+        loading={pendingActionId === confirmReject?._id}
       />
     </div>
   )

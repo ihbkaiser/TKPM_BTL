@@ -17,6 +17,7 @@ router.get('/recipes', adminController.getPublicRecipes);
 router.post('/recipes', adminController.createPublicRecipe);
 router.get('/recipes/pending', adminController.getPendingRecipes);
 router.put('/recipes/:id/approve', adminController.approveRecipe);
+router.put('/recipes/:id/reject', adminController.rejectRecipe);
 router.put('/recipes/:id', adminController.updatePublicRecipe);
 router.delete('/recipes/:id', adminController.deletePublicRecipe);
 router.get('/stats', adminController.getStats);

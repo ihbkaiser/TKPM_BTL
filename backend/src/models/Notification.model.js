@@ -20,6 +20,9 @@ const notificationSchema = new mongoose.Schema({
       'shopping_update',
       'meal_reminder',
       'recipe_cooked',
+      'recipe_pending',
+      'recipe_approved',
+      'recipe_rejected',
       'family_invite',
       'family_invite_accepted',
       'system'

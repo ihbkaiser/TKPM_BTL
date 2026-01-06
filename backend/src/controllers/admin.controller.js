@@ -1,6 +1,9 @@
 const User = require('../models/User.model');
 const Recipe = require('../models/Recipe.model');
 const FamilyGroup = require('../models/FamilyGroup.model');
+const Notification = require('../models/Notification.model');
+const notificationService = require('../services/notification.service');
+const { ROLES } = require('../config/roles');
 
 exports.getUsers = async (req, res, next) => {
   try {
@@ -180,6 +183,8 @@ exports.getPendingRecipes = async (req, res, next) => {
         { visibility: { $exists: false } }
       ]
     })
+      .populate('ingredients.foodItemId', 'name')
+      .populate('ingredients.unitId', 'name abbreviation')
       .populate('createdBy', 'fullName email')
       .sort({ createdAt: -1 });
 
@@ -195,16 +200,7 @@ exports.getPendingRecipes = async (req, res, next) => {
 
 exports.approveRecipe = async (req, res, next) => {
   try {
-    const recipe = await Recipe.findByIdAndUpdate(
-      req.params.id,
-      {
-        isApproved: true,
-        visibility: 'public',
-        approvedBy: req.user.id,
-        approvedAt: new Date()
-      },
-      { new: true }
-    );
+    const recipe = await Recipe.findById(req.params.id).populate('createdBy', 'fullName email');
 
     if (!recipe) {
       return res.status(404).json({
@@ -213,9 +209,78 @@ exports.approveRecipe = async (req, res, next) => {
       });
     }
 
+    recipe.isApproved = true;
+    recipe.visibility = 'public';
+    recipe.approvedBy = req.user.id;
+    recipe.approvedAt = new Date();
+    await recipe.save();
+
+    if (recipe.createdBy) {
+      const notification = await Notification.create({
+        userId: recipe.createdBy._id,
+        type: 'recipe_approved',
+        title: 'Công thức đã được duyệt',
+        message: `Công thức "${recipe.name}" đã được duyệt và hiển thị công khai.`,
+        relatedId: recipe._id,
+        relatedType: 'Recipe',
+        scope: 'personal',
+        actorId: req.user.id,
+        actorName: req.user.fullName || req.user.email,
+        actionUrl: '/recipes',
+        actionLabel: notificationService.DEFAULT_ACTION_LABEL,
+        isRead: false
+      });
+      await notificationService.sendNotificationEmail(notification, { userId: recipe.createdBy._id });
+    }
+
     res.json({
       success: true,
       message: 'Phê duyệt công thức thành công',
+      data: { recipe }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.rejectRecipe = async (req, res, next) => {
+  try {
+    const recipe = await Recipe.findById(req.params.id).populate('createdBy', 'fullName email');
+
+    if (!recipe) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy công thức'
+      });
+    }
+
+    recipe.isApproved = false;
+    recipe.visibility = 'private';
+    recipe.approvedBy = null;
+    recipe.approvedAt = null;
+    await recipe.save();
+
+    if (recipe.createdBy) {
+      const notification = await Notification.create({
+        userId: recipe.createdBy._id,
+        type: 'recipe_rejected',
+        title: 'Công thức chưa được duyệt',
+        message: `Công thức "${recipe.name}" chưa được duyệt. Bạn có thể chỉnh sửa và gửi lại.`,
+        relatedId: recipe._id,
+        relatedType: 'Recipe',
+        scope: 'personal',
+        actorId: req.user.id,
+        actorName: req.user.fullName || req.user.email,
+        actionUrl: '/recipes',
+        actionLabel: 'Xem món ăn của tôi',
+        isRead: false
+      });
+      await notificationService.sendNotificationEmail(notification, { userId: recipe.createdBy._id });
+    }
+
+    res.json({
+      success: true,
+      message: 'Đã hủy duyệt công thức',
       data: { recipe }
     });
   } catch (error) {

@@ -6,6 +6,7 @@ const { buildViewFilter, resolveFamilyGroupId } = require('../utils/view');
 const Notification = require('../models/Notification.model');
 const ConsumptionLog = require('../models/ConsumptionLog.model');
 const FamilyGroup = require('../models/FamilyGroup.model');
+const User = require('../models/User.model');
 const notificationService = require('../services/notification.service');
 // Require các models liên quan để Mongoose có thể populate
 require('../models/FoodItem.model');
@@ -217,6 +218,47 @@ exports.getRecipes = async (req, res, next) => {
   }
 };
 
+exports.getMyRecipes = async (req, res, next) => {
+  try {
+    const recipes = await Recipe.find({ createdBy: req.user.id })
+      .populate('ingredients.foodItemId', 'name image')
+      .populate('ingredients.unitId', 'name abbreviation')
+      .sort({ createdAt: -1 });
+
+    const formattedRecipes = recipes.map(recipe => ({
+      _id: recipe._id,
+      name: recipe.name,
+      description: recipe.description,
+      image: recipe.image,
+      servings: recipe.servings,
+      prepTime: recipe.prepTime,
+      cookTime: recipe.cookTime,
+      difficulty: recipe.difficulty,
+      category: recipe.category,
+      visibility: recipe.visibility || 'public',
+      isApproved: recipe.isApproved,
+      createdAt: recipe.createdAt,
+      ingredients: (recipe.ingredients || []).map(ing => ({
+        foodItemId: ing.foodItemId?._id || ing.foodItemId || null,
+        foodItemName: ing.foodItemId?.name || 'Không rõ',
+        quantity: ing.quantity,
+        unitId: ing.unitId?._id || ing.unitId || null,
+        unitName: ing.unitId?.abbreviation || ing.unitId?.name || 'Không rõ',
+        notes: ing.notes || ''
+      })),
+      instructions: recipe.instructions || []
+    }));
+
+    res.json({
+      success: true,
+      count: formattedRecipes.length,
+      data: { recipes: formattedRecipes }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 exports.getRecipeById = async (req, res, next) => {
   try {
     const recipe = await Recipe.findOne({
@@ -360,6 +402,78 @@ exports.deleteRecipe = async (req, res, next) => {
     res.json({
       success: true,
       message: 'Xóa công thức thành công'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.submitRecipeForApproval = async (req, res, next) => {
+  try {
+    const recipe = await Recipe.findById(req.params.id);
+
+    if (!recipe) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy công thức'
+      });
+    }
+
+    const isOwner = recipe.createdBy?.toString() === req.user.id;
+    if (!isOwner) {
+      return res.status(403).json({
+        success: false,
+        message: 'Bạn không có quyền đề xuất công thức này'
+      });
+    }
+
+    if (recipe.isApproved) {
+      return res.status(400).json({
+        success: false,
+        message: 'Công thức đã được phê duyệt'
+      });
+    }
+
+    if (recipe.visibility === 'public') {
+      return res.status(400).json({
+        success: false,
+        message: 'Công thức đã được gửi để phê duyệt'
+      });
+    }
+
+    recipe.visibility = 'public';
+    recipe.isApproved = false;
+    recipe.approvedBy = null;
+    recipe.approvedAt = null;
+    await recipe.save();
+
+    const admins = await User.find({ role: ROLES.ADMIN, isActive: true }).select('_id');
+    const adminIds = admins.map(admin => admin._id);
+
+    if (adminIds.length > 0) {
+      const notifications = await notificationService.createNotificationForUsers(adminIds, {
+        type: 'recipe_pending',
+        title: 'Công thức mới chờ duyệt',
+        message: `${req.user.fullName || req.user.email} đã gửi công thức "${recipe.name}" để phê duyệt`,
+        relatedId: recipe._id,
+        relatedType: 'Recipe',
+        scope: 'personal',
+        actorId: req.user.id,
+        actorName: req.user.fullName || req.user.email,
+        actionUrl: '/admin/recipes',
+        actionLabel: 'Xem công thức chờ duyệt',
+        isRead: false
+      });
+
+      for (const notification of notifications) {
+        await notificationService.sendNotificationEmail(notification, { userId: notification.userId });
+      }
+    }
+
+    res.json({
+      success: true,
+      message: 'Đã gửi công thức để phê duyệt',
+      data: { recipe }
     });
   } catch (error) {
     next(error);

@@ -209,6 +209,18 @@ export async function approveRecipe(recipeId) {
   }
 }
 
+export async function rejectRecipe(recipeId) {
+  try {
+    const response = await apiRequest(`/admin/recipes/${recipeId}/reject`, {
+      method: 'PUT',
+    })
+    return response
+  } catch (error) {
+    console.error('Error rejecting recipe:', error)
+    throw error
+  }
+}
+
 export async function getAdminRecipes() {
   try {
     const response = await apiRequest('/admin/recipes')
@@ -253,6 +265,41 @@ export async function deleteAdminRecipe(recipeId) {
     return response
   } catch (error) {
     console.error('Error deleting admin recipe:', error)
+    throw error
+  }
+}
+
+export async function getMyRecipes() {
+  try {
+    const response = await apiRequest('/recipes/mine')
+    return response
+  } catch (error) {
+    console.error('Error fetching my recipes:', error)
+    throw error
+  }
+}
+
+export async function createRecipe(payload) {
+  try {
+    const response = await apiRequest('/recipes', {
+      method: 'POST',
+      body: payload,
+    })
+    return response
+  } catch (error) {
+    console.error('Error creating recipe:', error)
+    throw error
+  }
+}
+
+export async function submitRecipeForApproval(recipeId) {
+  try {
+    const response = await apiRequest(`/recipes/${recipeId}/submit`, {
+      method: 'PUT',
+    })
+    return response
+  } catch (error) {
+    console.error('Error submitting recipe for approval:', error)
     throw error
   }
 }
