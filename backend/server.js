@@ -67,7 +67,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // MongoDB connection
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/grocery_shopping', {
+mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/test', {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 })

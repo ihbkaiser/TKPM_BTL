@@ -32,7 +32,7 @@ npm install
 ```
 2) Tạo/cập nhật file `backend/.env`:
 ```bash
-MONGODB_URI=mongodb://localhost:27017/grocery_shopping
+MONGODB_URI=mongodb://localhost:27017/test
 PORT=5002
 NODE_ENV=development
 JWT_SECRET=change_me

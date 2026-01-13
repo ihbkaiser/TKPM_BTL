@@ -18,7 +18,7 @@ const Category = require('../models/Category.model');
 async function testExpiringNotifications() {
   try {
     console.log('🔗 Đang kết nối MongoDB...');
-    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/grocery_shopping', {
+    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/test', {
       useNewUrlParser: true,
       useUnifiedTopology: true,
     });

@@ -19,7 +19,7 @@ const Recipe = require('../models/Recipe.model');
 const seedData = async () => {
   try {
     console.log('🔄 Đang kết nối MongoDB...');
-    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/grocery_shopping');
+    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/test');
     console.log('✅ Kết nối MongoDB thành công');
 
     // Xóa dữ liệu cũ (optional - chỉ dùng cho development)

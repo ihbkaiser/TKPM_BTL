@@ -11,7 +11,7 @@ const Notification = require('../models/Notification.model');
 const FoodItem = require('../models/FoodItem.model');
 const Category = require('../models/Category.model');
 const ConsumptionLog = require('../models/ConsumptionLog.model');
-const { buildViewFilter, buildAggregateMatch } = require('../utils/view');
+const { buildViewFilter, buildAggregateMatch, mergeViewFilter } = require('../utils/view');
 const csvExport = require('../utils/csvExport');
 const pdfExport = require('../utils/pdfExport');
 
@@ -58,14 +58,19 @@ const getPurchaseStatisticsData = async (req) => {
   const { startDate, endDate } = getDateRange(period, offset);
   const viewFilter = buildViewFilter(req);
 
-  const shoppingLists = await ShoppingList.find({
-    ...viewFilter,
-    status: 'completed',
+  const dateFilter = {
     $or: [
       { completedAt: { $gte: startDate, $lte: endDate } },
       { completedAt: null, updatedAt: { $gte: startDate, $lte: endDate } }
     ]
-  })
+  };
+  
+  const shoppingLists = await ShoppingList.find(
+    mergeViewFilter(viewFilter, {
+      status: 'completed',
+      ...dateFilter
+    })
+  )
     .populate({
       path: 'items.foodItemId',
       select: 'name categoryId',
@@ -128,11 +133,12 @@ const getWasteStatisticsData = async (req) => {
   const { startDate, endDate } = getDateRange(period, offset);
   const viewFilter = buildViewFilter(req);
 
-  const expiredItems = await FridgeItem.find({
-    ...viewFilter,
-    status: 'expired',
-    createdAt: { $gte: startDate, $lte: endDate }
-  })
+  const expiredItems = await FridgeItem.find(
+    mergeViewFilter(viewFilter, {
+      status: 'expired',
+      createdAt: { $gte: startDate, $lte: endDate }
+    })
+  )
     .populate('foodItemId', 'name categoryId')
     .populate({ path: 'foodItemId', populate: { path: 'categoryId', select: 'name' } });
 
@@ -205,30 +211,34 @@ const getConsumptionStatisticsData = async (req) => {
   const { startDate, endDate } = getDateRange(period, offset);
   const viewFilter = buildViewFilter(req);
 
-  const shoppingLists = await ShoppingList.find({
-    ...viewFilter,
-    status: 'completed',
-    completedAt: { $gte: startDate, $lte: endDate }
-  }).populate('items.foodItemId', 'name');
+  const shoppingLists = await ShoppingList.find(
+    mergeViewFilter(viewFilter, {
+      status: 'completed',
+      completedAt: { $gte: startDate, $lte: endDate }
+    })
+  ).populate('items.foodItemId', 'name');
 
-  const consumptionLogs = await ConsumptionLog.find({
-    ...viewFilter,
-    createdAt: { $gte: startDate, $lte: endDate }
-  }).populate('foodItemId', 'name');
+  const consumptionLogs = await ConsumptionLog.find(
+    mergeViewFilter(viewFilter, {
+      createdAt: { $gte: startDate, $lte: endDate }
+    })
+  ).populate('foodItemId', 'name');
 
   const usedItems = consumptionLogs.length === 0
-    ? await FridgeItem.find({
-        ...viewFilter,
-        status: 'used_up',
-        updatedAt: { $gte: startDate, $lte: endDate }
-      }).populate('foodItemId', 'name')
+    ? await FridgeItem.find(
+        mergeViewFilter(viewFilter, {
+          status: 'used_up',
+          updatedAt: { $gte: startDate, $lte: endDate }
+        })
+      ).populate('foodItemId', 'name')
     : [];
 
-  const wastedItems = await FridgeItem.find({
-    ...viewFilter,
-    status: 'expired',
-    createdAt: { $gte: startDate, $lte: endDate }
-  }).populate('foodItemId', 'name');
+  const wastedItems = await FridgeItem.find(
+    mergeViewFilter(viewFilter, {
+      status: 'expired',
+      createdAt: { $gte: startDate, $lte: endDate }
+    })
+  ).populate('foodItemId', 'name');
 
   const dateMap = new Map();
   const itemUsageMap = new Map();
@@ -312,17 +322,19 @@ const getDashboardOverviewData = async (req) => {
   const viewFilter = buildViewFilter(req);
   const aggregateMatch = buildAggregateMatch(req);
 
-  const totalFridgeItems = await FridgeItem.countDocuments({
-    ...viewFilter,
-    status: { $ne: 'used_up' }
-  });
+  const totalFridgeItems = await FridgeItem.countDocuments(
+    mergeViewFilter(viewFilter, {
+      status: { $ne: 'used_up' }
+    })
+  );
 
-  const expiringSoon = await FridgeItem.countDocuments({
-    ...viewFilter,
-    status: 'expiring_soon'
-  });
+  const expiringSoon = await FridgeItem.countDocuments(
+    mergeViewFilter(viewFilter, {
+      status: 'expiring_soon'
+    })
+  );
 
-  const shoppingListCount = await ShoppingList.countDocuments({ ...viewFilter });
+  const shoppingListCount = await ShoppingList.countDocuments(viewFilter);
 
   const now = new Date();
   const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);

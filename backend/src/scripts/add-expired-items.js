@@ -92,7 +92,7 @@ async function main() {
     process.exit(1);
   }
 
-  await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/grocery_shopping', {
+  await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/test', {
     useNewUrlParser: true,
     useUnifiedTopology: true
   });

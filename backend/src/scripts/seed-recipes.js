@@ -17,7 +17,7 @@ const pickMap = (items, key) => new Map(items.map(item => [item[key], item]));
 const seedRecipes = async () => {
   try {
     console.log('🔄 Kết nối MongoDB...');
-    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/grocery_shopping');
+    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/test');
     console.log('✅ Kết nối MongoDB thành công');
 
     const adminUser = await User.findOne({ role: 'admin' }).sort({ createdAt: 1 });

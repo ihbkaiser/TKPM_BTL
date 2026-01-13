@@ -6,7 +6,7 @@ const FoodItem = require('../models/FoodItem.model');
 const Category = require('../models/Category.model');
 const ConsumptionLog = require('../models/ConsumptionLog.model');
 const mongoose = require('mongoose');
-const { buildViewFilter, buildAggregateMatch } = require('../utils/view');
+const { buildViewFilter, buildAggregateMatch, mergeViewFilter } = require('../utils/view');
 
 // Helper function để tính date range dựa trên period
 const getDateRange = (period, offset = 0) => {
@@ -59,11 +59,14 @@ exports.getPurchaseStatistics = async (req, res, next) => {
       : [userId];
     const viewFilter = buildViewFilter(req);
 
+    // Debug log để kiểm tra filter
+    if (process.env.NODE_ENV === 'development' && req.view === 'family') {
+      console.log('[Purchase Statistics] View filter:', JSON.stringify(viewFilter, null, 2));
+    }
+
     // Lấy tất cả completed shopping lists trong khoảng thời gian
     // Nếu completedAt = null, sử dụng updatedAt hoặc createdAt
-    const shoppingLists = await ShoppingList.find({
-      ...viewFilter,
-      status: 'completed',
+    const dateFilter = {
       $or: [
         { completedAt: { $gte: startDate, $lte: endDate } },
         { 
@@ -71,7 +74,14 @@ exports.getPurchaseStatistics = async (req, res, next) => {
           updatedAt: { $gte: startDate, $lte: endDate }
         }
       ]
-    })
+    };
+    
+    const query = mergeViewFilter(viewFilter, {
+      status: 'completed',
+      ...dateFilter
+    });
+    
+    const shoppingLists = await ShoppingList.find(query)
       .populate({
         path: 'items.foodItemId',
         select: 'name categoryId',
@@ -181,12 +191,18 @@ exports.getWasteStatistics = async (req, res, next) => {
     const { startDate, endDate } = getDateRange(period, offset);
     const viewFilter = buildViewFilter(req);
 
+    // Debug log để kiểm tra filter
+    if (process.env.NODE_ENV === 'development' && req.view === 'family') {
+      console.log('[Waste Statistics] View filter:', JSON.stringify(viewFilter, null, 2));
+    }
+
     // Lấy tất cả expired fridge items trong khoảng thời gian
-    const expiredItems = await FridgeItem.find({
-      ...viewFilter,
-      status: 'expired',
-      createdAt: { $gte: startDate, $lte: endDate }
-    })
+    const expiredItems = await FridgeItem.find(
+      mergeViewFilter(viewFilter, {
+        status: 'expired',
+        createdAt: { $gte: startDate, $lte: endDate }
+      })
+    )
       .populate('foodItemId', 'name categoryId')
       .populate({
         path: 'foodItemId',
@@ -308,36 +324,45 @@ exports.getConsumptionStatistics = async (req, res, next) => {
     const { startDate, endDate } = getDateRange(period, offset);
     const viewFilter = buildViewFilter(req);
 
+    // Debug log để kiểm tra filter
+    if (process.env.NODE_ENV === 'development' && req.view === 'family') {
+      console.log('[Consumption Statistics] View filter:', JSON.stringify(viewFilter, null, 2));
+    }
+
     // 1. Lấy purchased items từ completed shopping lists
-    const shoppingLists = await ShoppingList.find({
-      ...viewFilter,
+    const query = mergeViewFilter(viewFilter, {
       status: 'completed',
       completedAt: { $gte: startDate, $lte: endDate }
-    })
+    });
+    
+    const shoppingLists = await ShoppingList.find(query)
       .populate('items.foodItemId', 'name');
 
     // 2. Lấy used items từ consumption logs (ưu tiên), fallback to used_up nếu chưa có log
-    const consumptionLogs = await ConsumptionLog.find({
-      ...viewFilter,
-      createdAt: { $gte: startDate, $lte: endDate }
-    })
+    const consumptionLogs = await ConsumptionLog.find(
+      mergeViewFilter(viewFilter, {
+        createdAt: { $gte: startDate, $lte: endDate }
+      })
+    )
       .populate('foodItemId', 'name');
 
     const usedItems = consumptionLogs.length === 0
-      ? await FridgeItem.find({
-          ...viewFilter,
-          status: 'used_up',
-          updatedAt: { $gte: startDate, $lte: endDate }
-        })
+      ? await FridgeItem.find(
+          mergeViewFilter(viewFilter, {
+            status: 'used_up',
+            updatedAt: { $gte: startDate, $lte: endDate }
+          })
+        )
           .populate('foodItemId', 'name')
       : [];
 
     // 3. Lấy wasted items (status = expired)
-    const wastedItems = await FridgeItem.find({
-      ...viewFilter,
-      status: 'expired',
-      createdAt: { $gte: startDate, $lte: endDate }
-    })
+    const wastedItems = await FridgeItem.find(
+      mergeViewFilter(viewFilter, {
+        status: 'expired',
+        createdAt: { $gte: startDate, $lte: endDate }
+      })
+    )
       .populate('foodItemId', 'name');
 
     // Aggregate by date
@@ -558,21 +583,21 @@ exports.getDashboardOverview = async (req, res, next) => {
     const aggregateMatch = buildAggregateMatch(req);
 
     // 1. Tổng số thực phẩm trong tủ lạnh (status != used_up)
-    const totalFridgeItems = await FridgeItem.countDocuments({
-      ...viewFilter,
-      status: { $ne: 'used_up' }
-    });
+    const totalFridgeItems = await FridgeItem.countDocuments(
+      mergeViewFilter(viewFilter, {
+        status: { $ne: 'used_up' }
+      })
+    );
 
     // 2. Số thực phẩm sắp hết hạn (expiring_soon)
-    const expiringSoon = await FridgeItem.countDocuments({
-      ...viewFilter,
-      status: 'expiring_soon'
-    });
+    const expiringSoon = await FridgeItem.countDocuments(
+      mergeViewFilter(viewFilter, {
+        status: 'expiring_soon'
+      })
+    );
 
     // 3. Số danh sách mua sắm (không phân biệt trạng thái)
-    const shoppingListCount = await ShoppingList.countDocuments({
-      ...viewFilter
-    });
+    const shoppingListCount = await ShoppingList.countDocuments(viewFilter);
 
     // 4. Tính waste reduction (so sánh tháng này vs tháng trước)
     const now = new Date();
@@ -645,34 +670,40 @@ exports.getDashboardOverview = async (req, res, next) => {
       shoppingListsThisMonth,
       shoppingListsLastMonth
     ] = await Promise.all([
-      FridgeItem.countDocuments({
-        ...viewFilter,
-        status: { $ne: 'used_up' },
-        createdAt: { $gte: thisMonthStart }
-      }),
-      FridgeItem.countDocuments({
-        ...viewFilter,
-        status: { $ne: 'used_up' },
-        createdAt: { $gte: lastMonthStart, $lte: lastMonthEnd }
-      }),
-      FridgeItem.countDocuments({
-        ...viewFilter,
-        status: 'expiring_soon',
-        createdAt: { $gte: thisMonthStart }
-      }),
-      FridgeItem.countDocuments({
-        ...viewFilter,
-        status: 'expiring_soon',
-        createdAt: { $gte: lastMonthStart, $lte: lastMonthEnd }
-      }),
-      ShoppingList.countDocuments({
-        ...viewFilter,
-        createdAt: { $gte: thisMonthStart }
-      }),
-      ShoppingList.countDocuments({
-        ...viewFilter,
-        createdAt: { $gte: lastMonthStart, $lte: lastMonthEnd }
-      })
+      FridgeItem.countDocuments(
+        mergeViewFilter(viewFilter, {
+          status: { $ne: 'used_up' },
+          createdAt: { $gte: thisMonthStart }
+        })
+      ),
+      FridgeItem.countDocuments(
+        mergeViewFilter(viewFilter, {
+          status: { $ne: 'used_up' },
+          createdAt: { $gte: lastMonthStart, $lte: lastMonthEnd }
+        })
+      ),
+      FridgeItem.countDocuments(
+        mergeViewFilter(viewFilter, {
+          status: 'expiring_soon',
+          createdAt: { $gte: thisMonthStart }
+        })
+      ),
+      FridgeItem.countDocuments(
+        mergeViewFilter(viewFilter, {
+          status: 'expiring_soon',
+          createdAt: { $gte: lastMonthStart, $lte: lastMonthEnd }
+        })
+      ),
+      ShoppingList.countDocuments(
+        mergeViewFilter(viewFilter, {
+          createdAt: { $gte: thisMonthStart }
+        })
+      ),
+      ShoppingList.countDocuments(
+        mergeViewFilter(viewFilter, {
+          createdAt: { $gte: lastMonthStart, $lte: lastMonthEnd }
+        })
+      )
     ]);
 
     const changes = {
@@ -831,10 +862,11 @@ exports.getRecentActivities = async (req, res, next) => {
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-    const recentFridgeItems = await FridgeItem.find({
-      ...viewFilter,
-      createdAt: { $gte: sevenDaysAgo }
-    })
+    const recentFridgeItems = await FridgeItem.find(
+      mergeViewFilter(viewFilter, {
+        createdAt: { $gte: sevenDaysAgo }
+      })
+    )
       .populate('foodItemId', 'name')
       .sort({ createdAt: -1 })
       .limit(5);
@@ -851,13 +883,16 @@ exports.getRecentActivities = async (req, res, next) => {
     });
 
     // 2. Lấy ShoppingLists mới được tạo hoặc completed
-    const recentShoppingLists = await ShoppingList.find({
-      ...viewFilter,
+    const dateFilterForRecent = {
       $or: [
         { createdAt: { $gte: sevenDaysAgo } },
         { completedAt: { $gte: sevenDaysAgo } }
       ]
-    })
+    };
+    
+    const recentShoppingLists = await ShoppingList.find(
+      mergeViewFilter(viewFilter, dateFilterForRecent)
+    )
       .sort({ createdAt: -1, completedAt: -1 })
       .limit(5);
 

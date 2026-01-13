@@ -12,7 +12,7 @@ const User = require('../models/User.model');
 const resetAdminPassword = async () => {
   try {
     console.log('🔄 Đang kết nối MongoDB...');
-    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/grocery_shopping');
+    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/test');
     console.log('✅ Kết nối MongoDB thành công');
 
     const adminEmail = 'admin@grocery.com';
