@@ -15,14 +15,17 @@ import {
   Legend,
 } from "recharts"
 import { mockStatistics } from "@/data/mockData"
-import { TrendingDown, TrendingUp, AlertTriangle, ShoppingCart, Utensils, Calendar, Loader2, BarChart3, PieChart } from "lucide-react"
-import { getPurchaseStatistics, getWasteStatistics, getConsumptionStatistics } from "@/utils/api"
+import { TrendingDown, TrendingUp, AlertTriangle, ShoppingCart, Utensils, Calendar, Loader2, BarChart3, PieChart, Download, FileSpreadsheet } from "lucide-react"
+import { getPurchaseStatistics, getWasteStatistics, getConsumptionStatistics, exportPurchaseStatisticsCSV, exportWasteStatisticsCSV, exportConsumptionStatisticsCSV } from "@/utils/api"
+import { Dropdown } from "@/components/ui/Dropdown"
 
 export function Statistics() {
   const [timePeriod, setTimePeriod] = useState("week") // week, month, year
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [statisticsData, setStatisticsData] = useState(null)
+  const [exporting, setExporting] = useState(false)
+  const [isExportMenuOpen, setIsExportMenuOpen] = useState(false)
 
   const calculatePercentChange = (currentValue, previousValue) => {
     if (previousValue > 0) {
@@ -273,6 +276,21 @@ export function Statistics() {
   const WastedTrendIcon = wastedChange.TrendIcon
   const WasteRateTrendIcon = wasteRateChange.TrendIcon
 
+  // Export handlers
+  const handleExport = async (exportFunction, type) => {
+    try {
+      setExporting(true)
+      setIsExportMenuOpen(false)
+      await exportFunction(timePeriod)
+      // Show success message (you can add toast notification here)
+    } catch (error) {
+      console.error(`Error exporting ${type}:`, error)
+      alert(`Lỗi khi xuất ${type}: ${error.message}`)
+    } finally {
+      setExporting(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -341,6 +359,51 @@ export function Statistics() {
             >
               Năm
             </Button>
+          </div>
+          {/* Export Button */}
+          <div className="relative">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={exporting || loading}
+              className="gap-2"
+              onClick={() => setIsExportMenuOpen(!isExportMenuOpen)}
+            >
+              <Download className="h-4 w-4" />
+              {exporting ? "Đang xuất..." : "Xuất báo cáo"}
+            </Button>
+            <Dropdown
+              isOpen={isExportMenuOpen}
+              onClose={() => setIsExportMenuOpen(false)}
+              className="w-56"
+            >
+              <div className="py-1">
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-accent focus:bg-accent focus:outline-none"
+                  onClick={() => handleExport(exportPurchaseStatisticsCSV, "CSV mua sắm")}
+                >
+                  <FileSpreadsheet className="h-4 w-4 text-muted-foreground" />
+                  <span>Xuất CSV - Mua sắm</span>
+                </button>
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-accent focus:bg-accent focus:outline-none"
+                  onClick={() => handleExport(exportWasteStatisticsCSV, "CSV lãng phí")}
+                >
+                  <FileSpreadsheet className="h-4 w-4 text-muted-foreground" />
+                  <span>Xuất CSV - Lãng phí</span>
+                </button>
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-accent focus:bg-accent focus:outline-none"
+                  onClick={() => handleExport(exportConsumptionStatisticsCSV, "CSV tiêu thụ")}
+                >
+                  <FileSpreadsheet className="h-4 w-4 text-muted-foreground" />
+                  <span>Xuất CSV - Tiêu thụ</span>
+                </button>
+              </div>
+            </Dropdown>
           </div>
         </div>
       </div>

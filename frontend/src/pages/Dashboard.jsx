@@ -13,11 +13,13 @@ import {
   Utensils,
   Bell,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Download,
+  FileSpreadsheet
 } from "lucide-react"
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts"
 import { mockDashboardStats, mockWasteData, mockCategoryData } from "@/data/mockData"
-import { getDashboardOverview, getRecentActivities } from "@/utils/api"
+import { getDashboardOverview, getRecentActivities, exportDashboardOverviewCSV } from "@/utils/api"
 
 const COLORS = ["#22C55E", "#10b981", "#16a34a", "#ef4444", "#f59e0b"]
 
@@ -34,6 +36,7 @@ export function Dashboard() {
     hasNextPage: false,
     hasPrevPage: false
   })
+  const [exporting, setExporting] = useState(false)
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -177,6 +180,19 @@ export function Dashboard() {
   const expiringSoonChange = getChangePercent(changeData.expiringSoon?.percent, fallbackChanges.expiringSoon)
   const shoppingListChange = getChangePercent(changeData.shoppingListCount?.percent, fallbackChanges.shoppingListCount)
 
+  // Export handler
+  const handleExport = async () => {
+    try {
+      setExporting(true)
+      await exportDashboardOverviewCSV()
+    } catch (error) {
+      console.error('Error exporting CSV:', error)
+      alert(`Lỗi khi xuất CSV: ${error.message}`)
+    } finally {
+      setExporting(false)
+    }
+  }
+
   const stats = [
     {
       title: "Tổng thực phẩm",
@@ -228,15 +244,28 @@ export function Dashboard() {
           <h1 className="text-3xl font-bold">Dashboard</h1>
           <p className="text-muted-foreground">Tổng quan hệ thống quản lý thực phẩm</p>
         </div>
-        {isUsingDatabaseData ? (
-          <Badge variant="outline" className="text-xs text-green-600 bg-green-50 dark:bg-green-900/20">
-            ✓ Dữ liệu từ Database
-          </Badge>
-        ) : error ? (
-          <Badge variant="outline" className="text-xs text-yellow-600 bg-yellow-50 dark:bg-yellow-900/20">
-            ⚠ Đang dùng dữ liệu demo ({error})
-          </Badge>
-        ) : null}
+        <div className="flex items-center gap-4">
+          {isUsingDatabaseData ? (
+            <Badge variant="outline" className="text-xs text-green-600 bg-green-50 dark:bg-green-900/20">
+              ✓ Dữ liệu từ Database
+            </Badge>
+          ) : error ? (
+            <Badge variant="outline" className="text-xs text-yellow-600 bg-yellow-50 dark:bg-yellow-900/20">
+              ⚠ Đang dùng dữ liệu demo ({error})
+            </Badge>
+          ) : null}
+          {/* Export Button */}
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={exporting || loading}
+            className="gap-2"
+            onClick={handleExport}
+          >
+            <FileSpreadsheet className="h-4 w-4" />
+            {exporting ? "Đang xuất..." : "Xuất CSV"}
+          </Button>
+        </div>
       </div>
 
       {/* Stats Grid */}

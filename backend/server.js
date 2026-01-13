@@ -22,6 +22,7 @@ const familyGroupRoutes = require('./src/routes/familyGroup.routes');
 const notificationRoutes = require('./src/routes/notification.routes');
 const adminRoutes = require('./src/routes/admin.routes');
 const statisticsRoutes = require('./src/routes/statistics.routes');
+const exportRoutes = require('./src/routes/export.routes');
 
 // Import error handler
 const errorHandler = require('./src/middleware/errorHandler.middleware');
@@ -104,6 +105,7 @@ app.use('/api/family-groups', familyGroupRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/statistics', statisticsRoutes);
+app.use('/api/export', exportRoutes);
 
 // 404 handler
 app.use((req, res) => {

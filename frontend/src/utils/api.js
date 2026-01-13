@@ -525,6 +525,61 @@ export async function getConsumptionStatistics(period = 'month', offset = 0) {
   }
 }
 
+// Export APIs - Download CSV reports
+export async function downloadExportFile(endpoint, filename) {
+  try {
+    const token = getAuthToken()
+    const view = getViewMode()
+    
+    const url = new URL(`${API_BASE_URL}${endpoint}`, window.location.origin)
+    if (view) {
+      url.searchParams.set('view', view)
+    }
+    
+    const response = await fetch(url.toString(), {
+      method: 'GET',
+      headers: {
+        ...(token && { Authorization: `Bearer ${token}` }),
+      },
+    })
+    
+    if (!response.ok) {
+      throw new Error(`Failed to download: ${response.statusText}`)
+    }
+    
+    const blob = await response.blob()
+    const downloadUrl = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = downloadUrl
+    link.download = filename || 'report'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(downloadUrl)
+    
+    return { success: true }
+  } catch (error) {
+    console.error('Error downloading export file:', error)
+    throw error
+  }
+}
+
+export async function exportPurchaseStatisticsCSV(period = 'month') {
+  return downloadExportFile(`/export/purchases/csv?period=${period}`, `bao-cao-mua-sam-${period}.csv`)
+}
+
+export async function exportWasteStatisticsCSV(period = 'month') {
+  return downloadExportFile(`/export/waste/csv?period=${period}`, `bao-cao-lang-phi-${period}.csv`)
+}
+
+export async function exportConsumptionStatisticsCSV(period = 'month') {
+  return downloadExportFile(`/export/consumption/csv?period=${period}`, `bao-cao-tieu-thu-${period}.csv`)
+}
+
+export async function exportDashboardOverviewCSV() {
+  return downloadExportFile('/export/dashboard/csv', 'bao-cao-dashboard.csv')
+}
+
 // FridgeItem APIs
 export async function getFridgeItems() {
   try {
